@@ -4,3 +4,6 @@
 const foo = 'bar';
 console.log('test.js loaded', foo);
 
+const test = () => {
+  console.log('test function');
+}
