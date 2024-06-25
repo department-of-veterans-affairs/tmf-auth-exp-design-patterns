@@ -1,2 +1,2 @@
-# tmf-auth-exp-design-patterns
+# TMF Authenticated experience design patterns
 Developing design patterns for the authenticated experience
