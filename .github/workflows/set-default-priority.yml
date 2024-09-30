@@ -1,0 +1,26 @@
+name: Set Default Priority
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  set-priority:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set Priority to Normal
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const issueNumber = context.payload.issue.number;
+            const repo = context.repo.owner + "/" + context.repo.repo;
+            const priorityFieldId = ":rnq:"
+
+            const priorityValue = "normal";
+
+            // Update the issue with the default priority
+            await github.projects.updateCard({
+              card_id: context.payload.issue.id,
+              column_id: priorityFieldId,
+              value: priorityValue,
+            });
