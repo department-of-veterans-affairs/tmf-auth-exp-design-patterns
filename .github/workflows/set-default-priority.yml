@@ -1,0 +1,40 @@
+name: Set Default Priority
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  set-priority:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set Priority to Normal
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GH_TOKEN }}  # Use the GitHub token for authentication
+          script: |
+            const issueNumber = context.payload.issue.number;
+            const repo = context.repo.owner + "/" + context.repo.repo;
+            const priorityFieldId = ":rnq:";
+            const priorityValue = "normal";
+
+            // Fetch the issue to check if it is linked to a project
+            const { data: issue } = await github.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+            });
+
+            // Check if the issue is part of a project
+            if (issue.project_ids && issue.project_ids.length > 0) {
+              const cardId = issue.project_ids[0]; // Get the first project ID
+
+              // Update the issue with the default priority
+              await github.projects.updateCard({
+                card_id: cardId,
+                column_id: priorityFieldId,
+                value: priorityValue,
+              });
+            } else {
+              console.log("This issue is not linked to any project.");
+            }
