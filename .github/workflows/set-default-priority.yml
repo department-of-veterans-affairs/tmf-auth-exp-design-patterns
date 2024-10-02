@@ -12,6 +12,7 @@ jobs:
       - name: Set Issue Priority to Normal
         uses: actions/github-script@v6
         with:
+          github-token: ${{secrets.AW_GH_TOKEN}}
           script: |
             const issueNumber = context.payload.issue.number;
             const org = "department-of-veterans-affairs";
@@ -20,6 +21,10 @@ jobs:
 
             async function setDefaultPriority() {
               try {
+                const ghToken = process?.env?.['AW_GH_TOKEN']
+                if(!ghToken) {
+                  console.log('token not found... check secrets for repo')
+                }
                 // Get the project ID and fields using GraphQL
                 const { data: { organization } } = await github.graphql(`
                   query($org: String!, $projectNumber: Int!) {
