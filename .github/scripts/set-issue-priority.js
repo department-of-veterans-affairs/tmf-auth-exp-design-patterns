@@ -1,4 +1,4 @@
-const { Octokit } = require("@octokit/rest");
+import { Octokit } from '@octokit/rest';
 
 const ORG_NAME = process.env.ORG_NAME;
 const REPO_NAME = process.env.REPO_NAME;

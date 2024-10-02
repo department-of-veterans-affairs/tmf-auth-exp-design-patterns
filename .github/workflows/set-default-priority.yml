@@ -26,4 +26,4 @@ jobs:
           REPO_NAME: ${{ github.event.repository.name }}
           PROJECT_NUMBER: 1314
           ISSUE_NUMBER: ${{ github.event.issue.number }}
-        run: node .github/scripts/set-issue-priority.js
+        run: node --experimental-modules .github/scripts/set-issue-priority.js
