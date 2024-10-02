@@ -9,6 +9,7 @@ const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
 async function updateIssuePriority() {
   try {
+    // 1. Get the project (board) ID and fields using GraphQL
     const { organization } = await octokit.graphql(`
       query($org: String!, $projectNumber: Int!) {
         organization(login: $org) {
@@ -22,6 +23,17 @@ async function updateIssuePriority() {
                   options {
                     id
                     name
+                  }
+                }
+              }
+            }
+            items(first: 100, orderBy: {field: POSITION, direction: DESC}) {
+              nodes {
+                id
+                content {
+                  ... on Issue {
+                    id
+                    number
                   }
                 }
               }
@@ -51,26 +63,11 @@ async function updateIssuePriority() {
 
     console.log(`Found "Normal" priority option with ID: ${normalOption.id}`);
 
-    const { repository } = await octokit.graphql(`
-      query($owner: String!, $repo: String!, $number: Int!, $projectId: ID!) {
-        repository(owner: $owner, name: $repo) {
-          issue(number: $number) {
-            projectV2Items(first: 1, projectId: $projectId) {
-              nodes {
-                id
-              }
-            }
-          }
-        }
-      }
-    `, {
-      owner: ORG_NAME,
-      repo: REPO_NAME,
-      number: ISSUE_NUMBER,
-      projectId: project.id
-    });
-
-    const projectItem = repository.issue.projectV2Items.nodes[0];
+    const projectItem = project.items.nodes.find(item => {
+      console.log({ item });
+      return item.content && item.content.number === ISSUE_NUMBER
+    }
+    );
 
     if (!projectItem) {
       console.log("Issue not found in the project");
@@ -79,6 +76,7 @@ async function updateIssuePriority() {
 
     console.log(`Found issue in project with item ID: ${projectItem.id}`);
 
+    // 4. Update the Priority field for the issue in the project
     const result = await octokit.graphql(`
       mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
         updateProjectV2ItemFieldValue(
@@ -112,7 +110,6 @@ async function updateIssuePriority() {
       console.error("GraphQL query:", error.request.query);
       console.error("Variables:", error.request.variables);
     }
-    process.exit(1);
   }
 }
 
