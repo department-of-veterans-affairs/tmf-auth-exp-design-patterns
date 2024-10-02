@@ -1,4 +1,4 @@
-name: Set Default Priority
+name: Set Default Issue Priority
 
 on:
   issues:
@@ -7,34 +7,117 @@ on:
 jobs:
   set-priority:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Set Priority to Normal
+      - name: Set Issue Priority to Normal
         uses: actions/github-script@v6
         with:
-          github-token: ${{ secrets.GH_TOKEN }}  # Use the GitHub token for authentication
           script: |
             const issueNumber = context.payload.issue.number;
-            const repo = context.repo.owner + "/" + context.repo.repo;
-            const priorityFieldId = ":rnq:";
-            const priorityValue = "normal";
+            const org = "department-of-veterans-affairs";
+            const repo = "tmf-auth-exp-design-patterns";
+            const projectNumber = 1314;
 
-            // Fetch the issue to check if it is linked to a project
-            const { data: issue } = await github.issues.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-            });
+            async function setDefaultPriority() {
+              try {
+                // Get the project ID and fields using GraphQL
+                const { data: { organization } } = await github.graphql(`
+                  query($org: String!, $projectNumber: Int!) {
+                    organization(login: $org) {
+                      projectV2(number: $projectNumber) {
+                        id
+                        fields(first: 20) {
+                          nodes {
+                            ... on ProjectV2SingleSelectField {
+                              id
+                              name
+                              options {
+                                id
+                                name
+                              }
+                            }
+                          }
+                        }
+                        items(first: 10, orderBy: {field: POSITION, direction: DESC}) {
+                          nodes {
+                            id
+                            content {
+                              ... on Issue {
+                                id
+                                number
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                `, {
+                  org: org,
+                  projectNumber: projectNumber
+                });
 
-            // Check if the issue is part of a project
-            if (issue.project_ids && issue.project_ids.length > 0) {
-              const cardId = issue.project_ids[0]; // Get the first project ID
+                const project = organization.projectV2;
+                console.log(`Found project with ID: ${project.id}`);
 
-              // Update the issue with the default priority
-              await github.projects.updateCard({
-                card_id: cardId,
-                column_id: priorityFieldId,
-                value: priorityValue,
-              });
-            } else {
-              console.log("This issue is not linked to any project.");
+                const priorityField = project.fields.nodes.find(field => field.name === "Priority");
+                if (!priorityField) {
+                  console.log("Priority field not found in the project");
+                  return;
+                }
+
+                const normalOption = priorityField.options.find(option => option.name.toLowerCase() === "normal");
+                if (!normalOption) {
+                  console.log("Normal priority option not found");
+                  return;
+                }
+
+                console.log(`Found "Normal" priority option with ID: ${normalOption.id}`);
+
+                const projectItem = project.items.nodes.find(item => item.content && item.content.number === issueNumber);
+
+                if (!projectItem) {
+                  console.log("Issue not found in the project");
+                  return;
+                }
+
+                console.log(`Found issue in project with item ID: ${projectItem.id}`);
+
+                // Update the Priority field for the issue in the project
+                const result = await github.graphql(`
+                  mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                    updateProjectV2ItemFieldValue(
+                      input: {
+                        projectId: $projectId,
+                        itemId: $itemId,
+                        fieldId: $fieldId,
+                        value: {
+                          singleSelectOptionId: $optionId
+                        }
+                      }
+                    ) {
+                      projectV2Item {
+                        id
+                      }
+                    }
+                  }
+                `, {
+                  projectId: project.id,
+                  itemId: projectItem.id,
+                  fieldId: priorityField.id,
+                  optionId: normalOption.id
+                });
+
+                console.log("Issue priority successfully set to 'Normal'");
+                console.log("Result:", result);
+
+              } catch (error) {
+                console.error("Error:", error.message);
+                if (error.request) {
+                  console.error("GraphQL query:", error.request.query);
+                  console.error("Variables:", error.request.variables);
+                }
+              }
             }
+
+            setDefaultPriority();
