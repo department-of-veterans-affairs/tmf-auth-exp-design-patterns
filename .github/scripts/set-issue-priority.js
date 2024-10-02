@@ -1,4 +1,4 @@
-const { Octokit } = await import("@octokit/rest");
+const { Octokit } = require("@octokit/rest");
 
 const ORG_NAME = process.env.ORG_NAME;
 const REPO_NAME = process.env.REPO_NAME;
