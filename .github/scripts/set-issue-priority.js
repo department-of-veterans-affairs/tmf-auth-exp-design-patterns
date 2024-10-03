@@ -35,7 +35,7 @@ async function updateIssuePriority() {
                     id
                     number
                     repository {
-                      nameWithOwner // Get the repo name in the format "owner/repo"
+                      nameWithOwner
                     }
                   }
                 }
