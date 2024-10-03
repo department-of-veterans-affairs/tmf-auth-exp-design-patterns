@@ -34,6 +34,9 @@ async function updateIssuePriority() {
                   ... on Issue {
                     id
                     number
+                    repository {
+                      nameWithOwner // Get the repo name in the format "owner/repo"
+                    }
                   }
                 }
               }
@@ -65,7 +68,7 @@ async function updateIssuePriority() {
 
     const projectItem = project.items.nodes.find(item => {
       console.log({ item });
-      return item.content && item.content.number === ISSUE_NUMBER
+      return item.content && item.content.number === ISSUE_NUMBER &&  item.content.repository.nameWithOwner === `${ORG_NAME}/${REPO_NAME}`;
     }
     );
 
