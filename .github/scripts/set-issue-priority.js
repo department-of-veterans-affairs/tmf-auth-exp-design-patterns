@@ -5,7 +5,7 @@ const REPO_NAME = process.env.REPO_NAME;
 const PROJECT_NUMBER = parseInt(process.env.PROJECT_NUMBER);
 const ISSUE_NUMBER = parseInt(process.env.ISSUE_NUMBER);
 
-const octokit = new Octokit({ auth: process.env.GH_TOKEN });
+const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
 async function updateIssuePriority() {
   try {
