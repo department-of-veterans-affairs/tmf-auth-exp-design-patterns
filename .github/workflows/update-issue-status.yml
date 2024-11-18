@@ -1,70 +1,70 @@
-name: Move Issue to 'Done' Column
+name: Update Issue Status and Move to Done in Project
 
 on:
   pull_request:
     types: [closed]
 
 jobs:
-  move-issue:
+  update-status:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Get the Issue Number from PR
-      - name: Get Issue Number from PR
-        id: get-issue-number
+      # Step 1: Get the Issue Number from PR Title or Body
+      - name: Get Issue Number from PR Title or Body
+        id: get_issue_number
         run: |
-          echo "issue_number=${{ github.event.pull_request.body }}" >> $GITHUB_ENV
-          echo "PR Title: ${{ github.event.pull_request.title }}"
+          # Try to extract issue number from PR title or body using regex
+          issue_number=$(echo "${{ github.event.pull_request.title }}" | grep -o '#[0-9]\+' | sed 's/#//')
+          
+          if [ -z "$issue_number" ]; then
+            issue_number=$(echo "${{ github.event.pull_request.body }}" | grep -o '#[0-9]\+' | sed 's/#//')
+          fi
 
-      # Step 2: Get Project ID (Static since you have the Project ID)
-      - name: Set Project ID and Repo Info
-        run: |
-          echo "project_id=1314" >> $GITHUB_ENV
-          echo "repo=tmf-auth-exp-design-patterns" >> $GITHUB_ENV
-          echo "owner=department-of-veterans-affairs" >> $GITHUB_ENV
-          echo "project_name=AEDP Team" >> $GITHUB_ENV
-
-      # Step 3: Get Column ID for 'Done' Column
-      - name: Get Column ID for 'Done' Column
-        id: get-column-id
-        run: |
-          project_id=${{ env.project_id }}
-          column_name="Done"
-          columns=$(curl -H "Authorization: token ${{ secrets.AW_GH_TOKEN }}" \
-            -s "https://api.github.com/repos/${{ env.owner }}/${{ env.repo }}/projects/${project_id}/columns")
-
-          column_id=$(echo "$columns" | jq -r ".[] | select(.name == \"$column_name\") | .id")
-
-          if [ -z "$column_id" ]; then
-            echo "Column '$column_name' not found."
+          if [ -z "$issue_number" ]; then
+            echo "No issue number found in the PR title or body."
             exit 1
           fi
 
-          echo "Column ID for '$column_name': $column_id"
-          echo "column_id=$column_id" >> $GITHUB_ENV
+          echo "Found issue number: $issue_number"
+          echo "issue_number=$issue_number" >> $GITHUB_ENV
 
-      # Step 4: Get Issue Card ID
-      - name: Get Card ID for Issue
-        id: get-card-id
+      # Step 2: Add 'Status: Done' comment to the issue
+      - name: Add 'Status Done' comment to the issue
         run: |
-          issue_number=${{ github.event.issue.number }}
-          cards=$(curl -H "Authorization: token ${{ secrets.AW_GH_TOKEN }}" \
-            -s "https://api.github.com/repos/${{ env.owner }}/${{ env.repo }}/projects/${{ env.project_id }}/columns/cards")
+          issue_number=${{ env.issue_number }}
+          echo "Adding 'Status: Done' comment to issue #$issue_number."
 
-          card_id=$(echo "$cards" | jq -r ".[] | select(.content_url | contains(\"/issues/$issue_number\")) | .id")
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
+            -d '{"body": "Status: Done"}' \
+            "https://api.github.com/repos/${{ github.repository }}/issues/$issue_number/comments"
 
-          if [ -z "$card_id" ]; then
-            echo "Card not found for Issue #$issue_number."
-            exit 1
-          fi
-
-          echo "Card ID for Issue #$issue_number: $card_id"
-          echo "card_id=$card_id" >> $GITHUB_ENV
-
-      # Step 5: Move Issue Card to 'Done' Column
-      - name: Move Issue Card to 'Done' Column
+      # Step 3: Move Issue to 'Done' in Project
+      - name: Move Issue to 'Done' in Project
         run: |
-          curl -X POST -H "Authorization: token ${{ secrets.AW_GH_TOKEN }}" \
-            -d '{"column_id": "${{ env.column_id }}"}' \
-            "https://api.github.com/projects/columns/cards/${{ env.card_id }}/moves"
-          echo "Issue moved to 'Done' column."
+          issue_number=${{ env.issue_number }}
+          project_id="1314"
+          
+          echo "Moving issue #$issue_number to project with ID $project_id"
+
+          # Use GraphQL API to add the issue to the project
+          query='
+          mutation {
+            addProjectV2ItemById(input: {projectId: "'$project_id'", contentId: "Issue/'$issue_number'"}) {
+              item {
+                id
+                content {
+                  ... on Issue {
+                    title
+                    number
+                  }
+                }
+              }
+            }
+          }'
+
+          response=$(curl -H "Authorization: Bearer ${{ secrets.GH_TOKEN }}" \
+            -X POST -d "{\"query\": \"$query\"}" \
+            https://api.github.com/graphql)
+
+          echo "$response"
