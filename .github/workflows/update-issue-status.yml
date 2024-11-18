@@ -1,98 +1,70 @@
-name: Update Issue Status and Project
+name: Move Issue to 'Done' Column
 
 on:
   pull_request:
     types: [closed]
 
 jobs:
-  check-pr-for-issue:
+  move-issue:
     runs-on: ubuntu-latest
-    outputs:
-      issue-number: ${{ steps.check-issue.outputs.issue-number }}
+
     steps:
-      - name: Get PR Title and Body
-        id: get-pr-data
+      # Step 1: Get the Issue Number from PR
+      - name: Get Issue Number from PR
+        id: get-issue-number
         run: |
+          echo "issue_number=${{ github.event.pull_request.body }}" >> $GITHUB_ENV
           echo "PR Title: ${{ github.event.pull_request.title }}"
-          echo "PR Body: ${{ github.event.pull_request.body }}"
-          echo "::set-output name=pr-title::${{ github.event.pull_request.title }}"
-          echo "::set-output name=pr-body::${{ github.event.pull_request.body }}"
 
-      - name: Check for Issue Number in PR Title or Body
-        id: check-issue
+      # Step 2: Get Project ID (Static since you have the Project ID)
+      - name: Set Project ID and Repo Info
         run: |
-          # Look for issue numbers in PR title or body
-          issue_number=$(echo "${{ steps.get-pr-data.outputs.pr-title }} ${{ steps.get-pr-data.outputs.pr-body }}" | grep -oP '#([0-9]+)' | head -n 1 | sed 's/#//')
-          
-          if [[ -z "$issue_number" ]]; then
-            echo "No issue number found."
-            echo "::set-output name=issue-number::none"
-          else
-            echo "Found issue number: $issue_number"
-            echo "::set-output name=issue-number::$issue_number"
-          fi
+          echo "project_id=1314" >> $GITHUB_ENV
+          echo "repo=tmf-auth-exp-design-patterns" >> $GITHUB_ENV
+          echo "owner=department-of-veterans-affairs" >> $GITHUB_ENV
+          echo "project_name=AEDP Team" >> $GITHUB_ENV
 
-  update-status:
-    needs: check-pr-for-issue
-    runs-on: ubuntu-latest
-    if: needs.check-pr-for-issue.outputs.issue-number != 'none'  # Only run if issue number is found
-    steps:
-      - name: Update Issue Status to "Done"
-        uses: peter-evans/create-or-update-comment@v2
-        with:
-          token: ${{ secrets.AW_GH_TOKEN }}
-          issue-number: ${{ needs.check-pr-for-issue.outputs.issue-number }}
-          body: "Status: Done"
-
-      - name: Move Issue Card to 'Done' Column in Project
+      # Step 3: Get Column ID for 'Done' Column
+      - name: Get Column ID for 'Done' Column
+        id: get-column-id
         run: |
-          # Ensure the issue number is properly assigned
-          issue_number=${{ needs.check-pr-for-issue.outputs.issue-number }}
-          echo "Moving issue #$issue_number to 'Done' column in the project..."
+          project_id=${{ env.project_id }}
+          column_name="Done"
+          columns=$(curl -H "Authorization: token ${{ secrets.AW_GH_TOKEN }}" \
+            -s "https://api.github.com/repos/${{ env.owner }}/${{ env.repo }}/projects/${project_id}/columns")
 
-          # Get the project ID by listing projects in the repository
-          project_name="AEDP Team"
-          project_id=$(curl -H "Authorization: token ${{ secrets.AW_GH_TOKEN }}" \
-            -s "https://api.github.com/repos/${{ github.repository }}/projects" | \
-            jq -r ".[] | select(.name == \"$project_name\") | .id")
+          column_id=$(echo "$columns" | jq -r ".[] | select(.name == \"$column_name\") | .id")
 
-          if [ -z "$project_id" ]; then
-            echo "Project '$project_name' not found in the repository."
+          if [ -z "$column_id" ]; then
+            echo "Column '$column_name' not found."
             exit 1
           fi
 
-          echo "Found project ID: $project_id"
+          echo "Column ID for '$column_name': $column_id"
+          echo "column_id=$column_id" >> $GITHUB_ENV
 
-          # Get all columns in the project to find the 'Done' column
-          done_column_id=$(curl -H "Authorization: token ${{ secrets.AW_GH_TOKEN }}" \
-            -s "https://api.github.com/repos/${{ github.repository }}/projects/${project_id}/columns" | \
-            jq -r '.[] | select(.name == "Done") | .id')
+      # Step 4: Get Issue Card ID
+      - name: Get Card ID for Issue
+        id: get-card-id
+        run: |
+          issue_number=${{ github.event.issue.number }}
+          cards=$(curl -H "Authorization: token ${{ secrets.AW_GH_TOKEN }}" \
+            -s "https://api.github.com/repos/${{ env.owner }}/${{ env.repo }}/projects/${{ env.project_id }}/columns/cards")
 
-          if [ -z "$done_column_id" ]; then
-            echo "Done column not found. Please ensure the column exists in the project."
+          card_id=$(echo "$cards" | jq -r ".[] | select(.content_url | contains(\"/issues/$issue_number\")) | .id")
+
+          if [ -z "$card_id" ]; then
+            echo "Card not found for Issue #$issue_number."
             exit 1
           fi
 
-          echo "Found 'Done' column ID: $done_column_id"
+          echo "Card ID for Issue #$issue_number: $card_id"
+          echo "card_id=$card_id" >> $GITHUB_ENV
 
-          # Get all project cards in the project
-          project_cards=$(curl -H "Authorization: token ${{ secrets.AW_GH_TOKEN }}" \
-            -s "https://api.github.com/repos/${{ github.repository }}/projects/${project_id}/columns/cards")
-
-          # Look for the project card that matches the issue number
-          project_card_id=$(echo "$project_cards" | jq -r '.[] | select(.content_url | contains("/issues/'$issue_number'")) | .id')
-
-          if [ -z "$project_card_id" ]; then
-            echo "No project card found for issue #$issue_number"
-            exit 1
-          fi
-
-          echo "Found project card ID: $project_card_id"
-
-          # Move the project card to the 'Done' column
+      # Step 5: Move Issue Card to 'Done' Column
+      - name: Move Issue Card to 'Done' Column
+        run: |
           curl -X POST -H "Authorization: token ${{ secrets.AW_GH_TOKEN }}" \
-            -d '{"column_id": "'$done_column_id'"}' \
-            "https://api.github.com/projects/columns/cards/$project_card_id/moves"
-        env:
-          GITHUB_TOKEN: ${{ secrets.AW_GH_TOKEN }}
-
+            -d '{"column_id": "${{ env.column_id }}"}' \
+            "https://api.github.com/projects/columns/cards/${{ env.card_id }}/moves"
+          echo "Issue moved to 'Done' column."
