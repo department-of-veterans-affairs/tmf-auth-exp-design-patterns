@@ -1,0 +1,76 @@
+name: Sync Status Across Projects
+
+on:
+  issues:
+    types: [edited, labeled, unlabeled, closed, reopened]
+
+jobs:
+  sync-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync Status Field
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const sourceProjectId = 'YOUR_SOURCE_PROJECT_ID';  // Replace with the source project ID
+            const targetProjectId = 'YOUR_TARGET_PROJECT_ID';  // Replace with the target project ID
+            const statusFieldId = 'YOUR_STATUS_FIELD_ID';      // Replace with the status field ID for both projects
+
+            // Fetch the current issue status from the source project
+            const issueNodeId = context.payload.issue.node_id;
+
+            // Fetch the status field value in the source project
+            const { resource } = await github.graphql(`
+              query($projectId: ID!, $issueId: ID!) {
+                node(id: $issueId) {
+                  ... on Issue {
+                    projectItems(first: 10) {
+                      nodes {
+                        fieldValues(first: 10) {
+                          nodes {
+                            projectField {
+                              id
+                            }
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `, {
+              projectId: sourceProjectId,
+              issueId: issueNodeId
+            });
+
+            // Extract the current status from the source project
+            const currentStatus = resource.node.projectItems.nodes.find(item => item.projectField.id === statusFieldId)?.value;
+
+            if (!currentStatus) {
+              console.log("No status field found or status has not changed.");
+              return;
+            }
+
+            // Update the status in the target project
+            await github.graphql(`
+              mutation($projectId: ID!, $contentId: ID!, $status: String!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $projectId,
+                  itemId: $contentId,
+                  fieldId: "${statusFieldId}",
+                  value: $status
+                }) {
+                  projectV2Item {
+                    id
+                  }
+                }
+              }
+            `, {
+              projectId: targetProjectId,
+              contentId: issueNodeId,
+              status: currentStatus
+            });
+
+            console.log(`Status synced successfully to target project for issue ID: ${issueNodeId}`);
