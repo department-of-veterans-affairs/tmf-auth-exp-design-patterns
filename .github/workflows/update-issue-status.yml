@@ -50,24 +50,7 @@ jobs:
           issue_number=${{ needs.check-pr-for-issue.outputs.issue-number }}
           echo "Moving issue #$issue_number to 'Done' column in the project..."
 
-          # Get the list of project cards associated with the issue
-          project_cards=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -s "https://api.github.com/repos/${{ github.repository }}/projects/columns/cards?issue=$issue_number")
-
-          # Debug: Print the project cards JSON to check the structure
-          echo "Project Cards: $project_cards"
-
-          # Check if project cards exist and extract the first card ID
-          project_card_id=$(echo "$project_cards" | jq -r '.[0].id')
-
-          if [ -z "$project_card_id" ]; then
-            echo "No project card found for issue #$issue_number"
-            exit 1
-          fi
-
-          echo "Found project card ID: $project_card_id"
-
-          # Dynamically get the project ID by listing the projects in the repository
+          # Get the project ID by listing projects in the repository
           project_name="My Project"  # Replace this with the name of your project
           project_id=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -s "https://api.github.com/repos/${{ github.repository }}/projects" | \
@@ -80,7 +63,7 @@ jobs:
 
           echo "Found project ID: $project_id"
 
-          # Dynamically get the 'Done' column ID by listing the columns in the project
+          # Get all columns in the project to find the 'Done' column
           done_column_id=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -s "https://api.github.com/repos/${{ github.repository }}/projects/${project_id}/columns" | \
             jq -r '.[] | select(.name == "Done") | .id')
@@ -92,9 +75,24 @@ jobs:
 
           echo "Found 'Done' column ID: $done_column_id"
 
+          # Get all project cards in the project
+          project_cards=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -s "https://api.github.com/repos/${{ github.repository }}/projects/${project_id}/columns/cards")
+
+          # Look for the project card that matches the issue number
+          project_card_id=$(echo "$project_cards" | jq -r '.[] | select(.content_url | contains("/issues/'$issue_number'")) | .id')
+
+          if [ -z "$project_card_id" ]; then
+            echo "No project card found for issue #$issue_number"
+            exit 1
+          fi
+
+          echo "Found project card ID: $project_card_id"
+
           # Move the project card to the 'Done' column
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -d '{"column_id": "'$done_column_id'"}' \
             "https://api.github.com/projects/columns/cards/$project_card_id/moves"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
