@@ -1,0 +1,16 @@
+name: Update Issue Status
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  update-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update Issue Status to "Done"
+        uses: actions-ecosystem/action-update-comment@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          issue_number: ${{ github.event.issue.number }}
+          comment: "Status: Done"

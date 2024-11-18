@@ -1,0 +1,33 @@
+name: Add Issue to Second Project
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  add-issue-to-project:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add Issue to Secondary Project
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const projectId = 'YOUR_SECOND_PROJECT_ID';  // Replace with your target project ID
+
+            const issue = context.payload.issue;
+            
+            const addProjectItem = await github.graphql(`
+              mutation($projectId: ID!, $contentId: ID!) {
+                addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+                  item {
+                    id
+                  }
+                }
+              }
+            `, {
+              projectId: projectId,
+              contentId: issue.node_id
+            });
+
+            console.log(`Issue #${issue.number} added to project with item ID: ${addProjectItem.addProjectV2ItemById.item.id}`);
