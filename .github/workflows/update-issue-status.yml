@@ -51,8 +51,8 @@ jobs:
           echo "Moving issue #$issue_number to 'Done' column in the project..."
 
           # Get the project ID by listing projects in the repository
-          project_name="tmf-auth-exp-design-patterns"
-          project_id=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          project_name="AEDP Team"
+          project_id=$(curl -H "Authorization: toen ${{ secrets.GITHUB_TOKEN }}" \
             -s "https://api.github.com/repos/${{ github.repository }}/projects" | \
             jq -r ".[] | select(.name == \"$project_name\") | .id")
 
