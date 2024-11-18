@@ -36,7 +36,7 @@ jobs:
             -d '{"body": "Status: Done"}' \
             "https://api.github.com/repos/${{ github.repository }}/issues/$issue_number/comments"
 
-      # Step 3: Move issue to 'Done' column in project (using GraphQL)
+      # Step 3: Move issue to 'Done' column in project
       - name: Move Issue to 'Done' in Project
         run: |
           issue_number=${{ env.issue_number }}
@@ -44,10 +44,9 @@ jobs:
 
           echo "Moving issue #$issue_number to project with ID $project_id"
 
-          # GraphQL Mutation to add the issue to the project
-          query='
-          mutation {
-            addProjectV2ItemById(input: {projectId: "'$project_id'", contentId: "Issue/'$issue_number'"}) {
+          # Create a valid GraphQL query
+          query="mutation {
+            addProjectV2ItemById(input: {projectId: \"$project_id\", contentId: \"Issue/$issue_number\"}) {
               item {
                 id
                 content {
@@ -58,12 +57,13 @@ jobs:
                 }
               }
             }
-          }'
+          }"
 
           # Send the GraphQL request
           response=$(curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -X POST \
-            -d "{\"query\": \"$query\"}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\":\"$query\"}" \
             https://api.github.com/graphql)
 
           echo "Response: $response"
