@@ -1,16 +1,16 @@
-name: Auto-assign user from issue label
+name: Auto-assign on Label
 
 on:
   issues:
-    types: [opened, edited]
+    types: [labeled]
 
 jobs:
-  label-issue:
+  auto-assign:
     runs-on: ubuntu-latest
     steps:
-      - name: Add Bug Label
-        if: contains(github.event.issue.title, 'bug')
-        uses: actions-ecosystem/action-add-labels@v1
+      - name: Assign to Developer for Bug
+        if: contains(github.event.label.name, 'bug')
+        uses: actions-ecosystem/action-assign-issue@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          labels: "bug"
+          assignees: "username"
