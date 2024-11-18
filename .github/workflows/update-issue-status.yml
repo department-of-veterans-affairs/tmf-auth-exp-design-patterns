@@ -5,12 +5,41 @@ on:
     types: [closed]
 
 jobs:
-  update-status:
+  check-pr-for-issue:
     runs-on: ubuntu-latest
+    outputs:
+      issue-number: ${{ steps.check-issue.outputs.issue-number }}
+    steps:
+      - name: Get PR Title and Body
+        id: get-pr-data
+        run: |
+          echo "PR Title: ${{ github.event.pull_request.title }}"
+          echo "PR Body: ${{ github.event.pull_request.body }}"
+          echo "::set-output name=pr-title::${{ github.event.pull_request.title }}"
+          echo "::set-output name=pr-body::${{ github.event.pull_request.body }}"
+
+      - name: Check for Issue Number in PR Title or Body
+        id: check-issue
+        run: |
+          # Look for issue numbers in PR title or body
+          issue_number=$(echo "${{ steps.get-pr-data.outputs.pr-title }} ${{ steps.get-pr-data.outputs.pr-body }}" | grep -oP '#([0-9]+)' | head -n 1 | sed 's/#//')
+          
+          if [[ -z "$issue_number" ]]; then
+            echo "No issue number found."
+            echo "::set-output name=issue-number::none"
+          else
+            echo "Found issue number: $issue_number"
+            echo "::set-output name=issue-number::$issue_number"
+          fi
+
+  update-status:
+    needs: check-pr-for-issue
+    runs-on: ubuntu-latest
+    if: needs.check-pr-for-issue.outputs.issue-number != 'none'  # Only run if issue number is found
     steps:
       - name: Update Issue Status to "Done"
         uses: peter-evans/create-or-update-comment@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          issue-number: ${{ github.event.issue.number }}
+          issue-number: ${{ needs.check-pr-for-issue.outputs.issue-number }}
           body: "Status: Done"
