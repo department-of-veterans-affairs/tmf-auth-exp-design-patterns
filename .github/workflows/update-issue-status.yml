@@ -46,21 +46,37 @@ jobs:
 
       - name: Move Issue Card to 'Done' Column in Project
         run: |
+          # Ensure the issue number is properly assigned
           issue_number=${{ needs.check-pr-for-issue.outputs.issue-number }}
           echo "Moving issue #$issue_number to 'Done' column in the project..."
 
-          # Fetch the issue details (we'll use the GitHub API to find the project)
+          # Fetch the issue details (we'll use the GitHub API to find the project cards)
           project_url="https://api.github.com/repos/${{ github.repository }}/issues/$issue_number"
           
           # Get the project cards associated with the issue
-          project_cards=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -s $project_url/labels)
+          project_cards=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -s $project_url)
 
-          # Look for the first project card in the response and move it to the 'Done' column
-          project_card_id=$(echo "$project_cards" | jq -r '.[0].id')  # You'll need to use jq to parse the response and get the card ID
+          # Debug: Print the project cards JSON to check the structure
+          echo "Project Cards: $project_cards"
 
-          # Now move the card to the 'Done' column (assuming the column ID is known or obtained earlier)
+          # Extract the first project card ID from the JSON response (if it exists)
+          project_card_id=$(echo "$project_cards" | jq -r '.[0].id')
+
+          if [ -z "$project_card_id" ]; then
+            echo "No project card found for issue #$issue_number"
+            exit 1
+          fi
+
+          echo "Found project card ID: $project_card_id"
+
+          # Specify the 'Done' column ID (replace this with your actual column ID)
           done_column_id=<YOUR_DONE_COLUMN_ID>
+          if [ -z "$done_column_id" ]; then
+            echo "Done column ID not set. Please provide a valid column ID."
+            exit 1
+          fi
 
+          # Move the project card to the 'Done' column
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -d '{"column_id": "'$done_column_id'"}' \
             "https://api.github.com/projects/columns/cards/$project_card_id/moves"
