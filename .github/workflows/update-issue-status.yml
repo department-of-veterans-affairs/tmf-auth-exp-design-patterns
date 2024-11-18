@@ -1,4 +1,4 @@
-name: Update Issue Status and Move to Done in Project
+name: Update Issue Status and Move to Project
 
 on:
   pull_request:
@@ -9,45 +9,42 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Get the Issue Number from PR Title or Body
-      - name: Get Issue Number from PR Title or Body
-        id: get_issue_number
+      # Step 1: Check for issue number in PR title or description
+      - name: Check for issue number in PR title or description
+        id: check-pr-for-issue
         run: |
-          # Try to extract issue number from PR title or body using regex
-          issue_number=$(echo "${{ github.event.pull_request.title }}" | grep -o '#[0-9]\+' | sed 's/#//')
+          pr_title="${{ github.event.pull_request.title }}"
+          pr_body="${{ github.event.pull_request.body }}"
+          issue_number=$(echo "$pr_title" "$pr_body" | grep -oE '#[0-9]+' | head -n 1 | sed 's/#//')
           
           if [ -z "$issue_number" ]; then
-            issue_number=$(echo "${{ github.event.pull_request.body }}" | grep -o '#[0-9]\+' | sed 's/#//')
-          fi
-
-          if [ -z "$issue_number" ]; then
-            echo "No issue number found in the PR title or body."
+            echo "No issue number found in PR title or description."
             exit 1
           fi
 
-          echo "Found issue number: $issue_number"
+          echo "Issue number found: $issue_number"
           echo "issue_number=$issue_number" >> $GITHUB_ENV
 
       # Step 2: Add 'Status: Done' comment to the issue
       - name: Add 'Status Done' comment to the issue
         run: |
           issue_number=${{ env.issue_number }}
-          echo "Adding 'Status: Done' comment to issue #$issue_number."
-
-          curl -X POST \
-            -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
+          echo "Adding 'Status: Done' comment to issue #$issue_number"
+          
+          curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -X POST \
             -d '{"body": "Status: Done"}' \
             "https://api.github.com/repos/${{ github.repository }}/issues/$issue_number/comments"
 
-      # Step 3: Move Issue to 'Done' in Project
+      # Step 3: Move issue to 'Done' column in project (using GraphQL)
       - name: Move Issue to 'Done' in Project
         run: |
           issue_number=${{ env.issue_number }}
-          project_id="1314"
-          
+          project_id="1314"  # Hardcoded Project ID for AEDP Team
+
           echo "Moving issue #$issue_number to project with ID $project_id"
 
-          # Use GraphQL API to add the issue to the project
+          # GraphQL Mutation to add the issue to the project
           query='
           mutation {
             addProjectV2ItemById(input: {projectId: "'$project_id'", contentId: "Issue/'$issue_number'"}) {
@@ -63,8 +60,10 @@ jobs:
             }
           }'
 
-          response=$(curl -H "Authorization: Bearer ${{ secrets.GH_TOKEN }}" \
-            -X POST -d "{\"query\": \"$query\"}" \
+          # Send the GraphQL request
+          response=$(curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -X POST \
+            -d "{\"query\": \"$query\"}" \
             https://api.github.com/graphql)
 
-          echo "$response"
+          echo "Response: $response"
