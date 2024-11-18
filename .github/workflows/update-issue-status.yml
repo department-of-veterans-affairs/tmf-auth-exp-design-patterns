@@ -52,7 +52,7 @@ jobs:
 
           # Get the project ID by listing projects in the repository
           project_name="AEDP Team"
-          project_id=$(curl -H "Authorization: toen ${{ secrets.GITHUB_TOKEN }}" \
+          project_id=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -s "https://api.github.com/repos/${{ github.repository }}/projects" | \
             jq -r ".[] | select(.name == \"$project_name\") | .id")
 
