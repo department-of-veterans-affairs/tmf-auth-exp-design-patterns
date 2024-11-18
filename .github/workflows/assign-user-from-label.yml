@@ -1,4 +1,4 @@
-name: Auto-label Issues
+name: Auto-assign user from issue label
 
 on:
   issues:
