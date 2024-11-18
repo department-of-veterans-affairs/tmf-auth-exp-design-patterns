@@ -40,7 +40,7 @@ jobs:
       - name: Update Issue Status to "Done"
         uses: peter-evans/create-or-update-comment@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.AW_GH_TOKEN }}
           issue-number: ${{ needs.check-pr-for-issue.outputs.issue-number }}
           body: "Status: Done"
 
@@ -52,7 +52,7 @@ jobs:
 
           # Get the project ID by listing projects in the repository
           project_name="AEDP Team"
-          project_id=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          project_id=$(curl -H "Authorization: token ${{ secrets.AW_GH_TOKEN }}" \
             -s "https://api.github.com/repos/${{ github.repository }}/projects" | \
             jq -r ".[] | select(.name == \"$project_name\") | .id")
 
@@ -64,7 +64,7 @@ jobs:
           echo "Found project ID: $project_id"
 
           # Get all columns in the project to find the 'Done' column
-          done_column_id=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          done_column_id=$(curl -H "Authorization: token ${{ secrets.AW_GH_TOKEN }}" \
             -s "https://api.github.com/repos/${{ github.repository }}/projects/${project_id}/columns" | \
             jq -r '.[] | select(.name == "Done") | .id')
 
@@ -76,7 +76,7 @@ jobs:
           echo "Found 'Done' column ID: $done_column_id"
 
           # Get all project cards in the project
-          project_cards=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          project_cards=$(curl -H "Authorization: token ${{ secrets.AW_GH_TOKEN }}" \
             -s "https://api.github.com/repos/${{ github.repository }}/projects/${project_id}/columns/cards")
 
           # Look for the project card that matches the issue number
@@ -90,9 +90,9 @@ jobs:
           echo "Found project card ID: $project_card_id"
 
           # Move the project card to the 'Done' column
-          curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          curl -X POST -H "Authorization: token ${{ secrets.AW_GH_TOKEN }}" \
             -d '{"column_id": "'$done_column_id'"}' \
             "https://api.github.com/projects/columns/cards/$project_card_id/moves"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.AW_GH_TOKEN }}
 
