@@ -39,7 +39,7 @@ jobs:
 
           echo "Query being sent to GraphQL API: $query"
 
-          response=$(curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          response=$(curl -H "Authorization: Bearer ${{ secrets.GH_TOKEN }}" \
             -X POST \
             -H "Content-Type: application/json" \
             -d "$query" \
@@ -80,7 +80,7 @@ jobs:
               }
             }
           }"
-          response=$(curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          response=$(curl -H "Authorization: Bearer ${{ secrets.GH_TOKEN }}" \
             -X POST \
             -H "Content-Type: application/json" \
             -d "$query" \
@@ -127,7 +127,7 @@ jobs:
             }
           }"
 
-          response=$(curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          response=$(curl -H "Authorization: Bearer ${{ secrets.GH_TOKEN }}" \
             -X POST \
             -H "Content-Type: application/json" \
             -d "$query" \
