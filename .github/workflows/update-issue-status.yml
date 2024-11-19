@@ -58,7 +58,7 @@ jobs:
           response=$(curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -X POST \
             -H "Content-Type: application/json" \
-            -d "{\"query\":\"$query\"}" \
+            -d "$query" \ 
             https://api.github.com/graphql)
 
           echo "GraphQL Response: $response"
