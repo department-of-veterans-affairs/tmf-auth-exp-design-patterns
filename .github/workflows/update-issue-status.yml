@@ -63,23 +63,10 @@ jobs:
         id: get-issue-id
         run: |
           issue_number=${{ env.issue_number }}
-          query="{
-            organization(login: \"${{ github.repository_owner }}\") {
-              projectV2(number: $project_number) {
-                items(first: 100, orderBy: {field: POSITION, direction: DESC}) {
-                  nodes {
-                    id
-                    content {
-                      ... on Issue {
-                        number
-                        id
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }"
+          project_number="1314"
+
+          query="{\"query\": \"{ organization(login: \\\"${{ github.repository_owner }}\\\") { projectV2(number: $project_number) { items(first: 100, orderBy: {field: POSITION, direction: DESC}) { nodes { id content { ... on Issue { number id } } } } } } }\"}"
+
           response=$(curl -H "Authorization: Bearer ${{ secrets.GH_TOKEN }}" \
             -X POST \
             -H "Content-Type: application/json" \
