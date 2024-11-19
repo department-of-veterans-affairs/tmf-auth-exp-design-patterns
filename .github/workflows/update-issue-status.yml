@@ -1,4 +1,4 @@
-name: Update Issue Status and Move to Project
+name: Update Issue Status
 
 on:
   pull_request:
@@ -25,41 +25,122 @@ jobs:
           echo "Issue number found: $issue_number"
           echo "issue_number=$issue_number" >> $GITHUB_ENV
 
-      # Step 2: Add 'Status: Done' comment to the issue
-      - name: Add 'Status Done' comment to the issue
+      # Step 2: Get organization name, project ID, status field ID, and done option ID
+      - name: Retrieve project details
+        id: get-project-details
         run: |
-          issue_number=${{ env.issue_number }}
-          echo "Adding 'Status: Done' comment to issue #$issue_number"
+          org_name="${{ github.repository_owner }}"
+          project_number="1314"
           
-          curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -X POST \
-            -d '{"body": "Status: Done"}' \
-            "https://api.github.com/repos/${{ github.repository }}/issues/$issue_number/comments"
+          echo "Fetching details for organization: $org_name, project number: $project_number"
 
-      # Step 3: Move issue to 'Done' column in project
-      - name: Move Issue to 'Done' in Project
-        run: |
-          issue_number=${{ env.issue_number }}
-          project_id="1314"  # Hardcoded Project ID for AEDP Team
-
-          echo "Moving issue #$issue_number to project with ID $project_id"
-
-          # Create a valid GraphQL query
-          query="mutation {
-            addProjectV2ItemById(input: {projectId: \"$project_id\", contentId: \"Issue/$issue_number\"}) {
-              item {
+          # GraphQL query to get project fields (including "Status" field and "Done" option)
+          query="{
+            organization(login: \"$org_name\") {
+              projectV2(number: $project_number) {
                 id
-                content {
-                  ... on Issue {
-                    title
-                    number
+                fields(first: 20) {
+                  nodes {
+                    ... on ProjectV2SingleSelectField {
+                      id
+                      name
+                      options {
+                        id
+                        name
+                      }
+                    }
                   }
                 }
               }
             }
           }"
 
-          # Send the GraphQL request
+          response=$(curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"query\":\"$query\"}" \
+            https://api.github.com/graphql)
+
+          # Extracting the status field ID and done option ID from the response
+          status_field_id=$(echo $response | jq -r '.data.organization.projectV2.fields.nodes[] | select(.name == "Status") | .id')
+          done_option_id=$(echo $response | jq -r '.data.organization.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "Done") | .id')
+
+          echo "Status Field ID: $status_field_id"
+          echo "Done Option ID: $done_option_id"
+
+          # Set environment variables for later steps
+          echo "status_field_id=$status_field_id" >> $GITHUB_ENV
+          echo "done_option_id=$done_option_id" >> $GITHUB_ENV
+
+      # Step 3: Get Issue ID (itemId) from project
+      - name: Get Issue ID from project
+        id: get-issue-id
+        run: |
+          issue_number=${{ env.issue_number }}
+          query="{
+            organization(login: \"${{ github.repository_owner }}\") {
+              projectV2(number: $project_number) {
+                items(first: 100, orderBy: {field: POSITION, direction: DESC}) {
+                  nodes {
+                    id
+                    content {
+                      ... on Issue {
+                        number
+                        id
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }"
+          response=$(curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"query\":\"$query\"}" \
+            https://api.github.com/graphql)
+
+          issue_id=$(echo $response | jq -r ".data.organization.projectV2.items.nodes[] | select(.content.number == $issue_number) | .id")
+          
+          if [ -z "$issue_id" ]; then
+            echo "Issue ID not found for issue #$issue_number."
+            exit 1
+          fi
+
+          echo "Issue ID: $issue_id"
+          echo "issue_id=$issue_id" >> $GITHUB_ENV
+
+      # Step 4: Update 'Status' field of the issue to 'Done'
+      - name: Update Issue Status to 'Done'
+        run: |
+          issue_id=${{ env.issue_id }}
+          project_id="1314"  # Dynamic project ID, if necessary
+          status_field_id="${{ env.status_field_id }}"  # Retrieved dynamically
+          done_option_id="${{ env.done_option_id }}"  # Retrieved dynamically
+
+          echo "Updating issue #$issue_number status to 'Done'"
+
+          # GraphQL Mutation to update status
+          query="mutation {
+            updateProjectV2ItemFieldValue(input: {
+              projectId: \"$project_id\",
+              itemId: \"$issue_id\",
+              fieldId: \"$status_field_id\",
+              value: \"$done_option_id\"
+            }) {
+              projectV2Item {
+                id
+                content {
+                  ... on Issue {
+                    id
+                    number
+                    title
+                  }
+                }
+              }
+            }
+          }"
+
           response=$(curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -X POST \
             -H "Content-Type: application/json" \
