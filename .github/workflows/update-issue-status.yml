@@ -35,25 +35,9 @@ jobs:
           echo "Fetching details for organization: $org_name, project number: $project_number"
 
           # GraphQL query to get project fields (including "Status" field and "Done" option)
-          query="{
-            organization(login: \"$org_name\") {
-              projectV2(number: $project_number) {
-                id
-                fields(first: 20) {
-                  nodes {
-                    ... on ProjectV2SingleSelectField {
-                      id
-                      name
-                      options {
-                        id
-                        name
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }"
+          query="{\"query\": \"{ organization(login: \\\"$org_name\\\") { projectV2(number: $project_number) { id fields(first: 20) { nodes { ... on ProjectV2SingleSelectField { id name options { id name } } } } } } }\"}"
+
+          echo "Query being sent to GraphQL API: $query"
 
           response=$(curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -X POST \
@@ -62,7 +46,6 @@ jobs:
             https://api.github.com/graphql)
 
           echo "GraphQL Response: $response"
-          echo "Query being sent to GraphQL API: $query"
 
           # Extracting the status field ID and done option ID from the response
           status_field_id=$(echo $response | jq -r '.data.organization.projectV2.fields.nodes[] | select(.name == "Status") | .id')
@@ -100,7 +83,7 @@ jobs:
           response=$(curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -X POST \
             -H "Content-Type: application/json" \
-            -d "{\"query\":\"$query\"}" \
+            -d "$query" \
             https://api.github.com/graphql)
 
           issue_id=$(echo $response | jq -r ".data.organization.projectV2.items.nodes[] | select(.content.number == $issue_number) | .id")
@@ -147,7 +130,7 @@ jobs:
           response=$(curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -X POST \
             -H "Content-Type: application/json" \
-            -d "{\"query\":\"$query\"}" \
+            -d "$query" \
             https://api.github.com/graphql)
 
           echo "Response: $response"
