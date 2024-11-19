@@ -61,6 +61,8 @@ jobs:
             -d "{\"query\":\"$query\"}" \
             https://api.github.com/graphql)
 
+          echo "GraphQL Response: $response"
+
           # Extracting the status field ID and done option ID from the response
           status_field_id=$(echo $response | jq -r '.data.organization.projectV2.fields.nodes[] | select(.name == "Status") | .id')
           done_option_id=$(echo $response | jq -r '.data.organization.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "Done") | .id')
