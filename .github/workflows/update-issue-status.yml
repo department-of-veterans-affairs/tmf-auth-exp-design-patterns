@@ -86,20 +86,40 @@ jobs:
       # Step 4: Update 'Status' field of the issue to 'Done'
       - name: Update Issue Status to 'Done'
         run: |
-          issue_id=${{ env.issue_id }}
-          project_id="1314"
-          status_field_id="${{ env.status_field_id }}"
-          done_option_id="${{ env.done_option_id }}"
-
-          echo "Updating issue #$issue_number status to 'Done'"
-
-          # GraphQL Mutation to update status
-          query="{\"query\": \"mutation { updateProjectV2ItemFieldValue(input: { projectId: \\\"$project_id\\\", itemId: \\\"$issue_id\\\", fieldId: \\\"$status_field_id\\\", value: { singleSelectOptionId: \\\"$done_option_id\\\" } }) { projectV2Item { id content { ... on Issue { id number title } } } } }\"}"
-
-          response=$(curl -H "Authorization: Bearer ${{ secrets.GH_TOKEN }}" \
+            issue_id=${{ env.issue_id }}
+            project_number="1314"
+            status_field_id="${{ env.status_field_id }}"
+            done_option_id="${{ env.done_option_id }}"
+        
+            echo "Updating issue #$issue_number status to 'Done'"
+        
+            # Query to get the global project ID
+            project_query="{\"query\": \"{ organization(login: \\\"department-of-veterans-affairs\\\") { projectV2(number: $project_number) { id } } }\"}"
+        
+            # Get the project ID
+            project_response=$(curl -H "Authorization: Bearer ${{ secrets.GH_TOKEN }}" \
             -X POST \
             -H "Content-Type: application/json" \
-            -d "$query" \
+            -d "$project_query" \
             https://api.github.com/graphql)
-
-          echo "Response: $response"
+        
+            project_id=$(echo $project_response | jq -r '.data.organization.projectV2.id')
+        
+            if [ -z "$project_id" ]; then
+            echo "Project ID not found for project number $project_number."
+            exit 1
+            fi
+        
+            echo "Found global project ID: $project_id"
+        
+            # GraphQL Mutation to update status
+            mutation_query="{\"query\": \"mutation { updateProjectV2ItemFieldValue(input: { projectId: \\\"$project_id\\\", itemId: \\\"$issue_id\\\", fieldId: \\\"$status_field_id\\\", value: { singleSelectOptionId: \\\"$done_option_id\\\" } }) { projectV2Item { id content { ... on Issue { id number title } } } } }\"}"
+        
+            response=$(curl -H "Authorization: Bearer ${{ secrets.GH_TOKEN }}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "$mutation_query" \
+            https://api.github.com/graphql)
+        
+            echo "Response: $response"
+    
