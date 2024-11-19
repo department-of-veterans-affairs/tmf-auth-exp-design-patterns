@@ -11,16 +11,43 @@ jobs:
       - name: Sync Status Field
         uses: actions/github-script@v6
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GH_TOKEN }}
           script: |
-            const sourceProjectId = 'YOUR_SOURCE_PROJECT_ID';  // Replace with the source project ID
-            const targetProjectId = 'YOUR_TARGET_PROJECT_ID';  // Replace with the target project ID
-            const statusFieldId = 'YOUR_STATUS_FIELD_ID';      // Replace with the status field ID for both projects
+            const sourceProjectId = 'PVT_kwDOAFK5-84Ak8oz';
+            const targetProjectId = 'PVT_kwDOAFK5-84Ar1s4';
 
             // Fetch the current issue status from the source project
             const issueNodeId = context.payload.issue.node_id;
 
-            // Fetch the status field value in the source project
+            // Fetch project fields for the source project to get the status field ID
+            const { sourceProjectFields } = await github.graphql(`
+              query($projectId: ID!) {
+                node(id: $projectId) {
+                  ... on ProjectV2 {
+                    fields(first: 100) {
+                      nodes {
+                        id
+                        name
+                      }
+                    }
+                  }
+                }
+              }
+            `, {
+              projectId: sourceProjectId
+            });
+
+            // Find the status field ID from the fields of the source project
+            const statusFieldId = sourceProjectFields.nodes.find(field => field.name === 'Status')?.id;
+
+            if (!statusFieldId) {
+              console.log("No 'Status' field found in source project.");
+              return;
+            }
+
+            console.log(`Found 'Status' field ID in source project: ${statusFieldId}`);
+
+            // Fetch the status field value for the current issue in the source project
             const { resource } = await github.graphql(`
               query($projectId: ID!, $issueId: ID!) {
                 node(id: $issueId) {
@@ -46,20 +73,50 @@ jobs:
             });
 
             // Extract the current status from the source project
-            const currentStatus = resource.node.projectItems.nodes.find(item => item.projectField.id === statusFieldId)?.value;
+            const currentStatus = resource.node.projectItems.nodes.find(item => item.projectField.id === statusFieldId)?.fieldValues.nodes.find(field => field.projectField.id === statusFieldId)?.value;
 
             if (!currentStatus) {
               console.log("No status field found or status has not changed.");
               return;
             }
 
-            // Update the status in the target project
+            console.log(`Current status in source project: ${currentStatus}`);
+
+            // Fetch the status field ID for the target project
+            const { targetProjectFields } = await github.graphql(`
+              query($projectId: ID!) {
+                node(id: $projectId) {
+                  ... on ProjectV2 {
+                    fields(first: 100) {
+                      nodes {
+                        id
+                        name
+                      }
+                    }
+                  }
+                }
+              }
+            `, {
+              projectId: targetProjectId
+            });
+
+            // Find the status field ID in the target project
+            const targetStatusFieldId = targetProjectFields.nodes.find(field => field.name === 'Status')?.id;
+
+            if (!targetStatusFieldId) {
+              console.log("No 'Status' field found in target project.");
+              return;
+            }
+
+            console.log(`Found 'Status' field ID in target project: ${targetStatusFieldId}`);
+
+            // Now sync the status field in the target project
             await github.graphql(`
               mutation($projectId: ID!, $contentId: ID!, $status: String!) {
                 updateProjectV2ItemFieldValue(input: {
                   projectId: $projectId,
                   itemId: $contentId,
-                  fieldId: "${statusFieldId}",
+                  fieldId: $statusFieldId,
                   value: $status
                 }) {
                   projectV2Item {
