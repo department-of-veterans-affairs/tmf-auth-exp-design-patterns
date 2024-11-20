@@ -42,11 +42,13 @@ jobs:
                   }
                 }
               `;
-              console.log("GraphQL Query:", query);
+              console.log("Running GraphQL Query with orgName:", orgName, "and projectNumber:", projectNumber);
               const { data } = await github.graphql(query, {
                 orgName: orgName,
                 projectNumber: projectNumber
               });
+              console.log("GraphQL Response:", JSON.stringify(data, null, 2));
+              console.log("GraphQL Errors:", JSON.stringify(errors, null, 2));
               return data;
             };
 
