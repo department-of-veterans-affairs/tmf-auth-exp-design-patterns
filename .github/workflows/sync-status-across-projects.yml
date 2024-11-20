@@ -13,7 +13,7 @@ jobs:
         with:
           github-token: ${{ secrets.GH_TOKEN }}
           script: |
-            const orgName = "${{ github.repository_owner }}";
+            const orgName =  process.env.GITHUB_REPOSITORY_OWNER;
             const sourceProjectNumber = 1314; 
             const sourceProjectId = 'PVT_kwDOAFK5-84Ak8oz';
             const targetProjectNumber = 1514; 
