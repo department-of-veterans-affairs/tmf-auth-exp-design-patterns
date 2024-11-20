@@ -23,6 +23,7 @@ jobs:
                   ... on ProjectV2 {
                     fields(first: 20) {
                       nodes {
+                        __typename  # to know the type of the field
                         ... on ProjectV2SingleSelectField {
                           id
                           name
@@ -30,6 +31,10 @@ jobs:
                             id
                             name
                           }
+                        }
+                        ... on ProjectV2Field {
+                          id
+                          name
                         }
                       }
                     }
@@ -42,8 +47,8 @@ jobs:
 
             // Extract the necessary field IDs dynamically
             const statusField = projectData.node.fields.nodes.find(field => field.name === 'Status');
-            const startDateField = projectData.node.fields.nodes.find(field => field.name === 'Start Date');
-            const endDateField = projectData.node.fields.nodes.find(field => field.name === 'End Date');
+            const startDateField = projectData.node.fields.nodes.find(field => field.name === 'Start Date' && field.__typename === 'ProjectV2Field');
+            const endDateField = projectData.node.fields.nodes.find(field => field.name === 'End Date' && field.__typename === 'ProjectV2Field');
 
             if (!statusField || !startDateField || !endDateField) {
               console.log('One or more required fields (Status, Start Date, End Date) not found.');
@@ -105,7 +110,7 @@ jobs:
             console.log(`Issue status: ${statusFieldValue}`);
 
             // Step 3: Update Start Date for "In Progress" status
-            if (statusFieldValue === 'In progress') {
+            if (statusFieldValue === 'In Progress') {
               console.log(`Updating Start Date for issue ${issueNodeId}`);
               await github.graphql(`
                 mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $value: String!) {
