@@ -42,6 +42,7 @@ jobs:
                   }
                 }
               `;
+              console.log("GraphQL Query:", query);
               const { data } = await github.graphql(query, {
                 orgName: orgName,
                 projectNumber: projectNumber
