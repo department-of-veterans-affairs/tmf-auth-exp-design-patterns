@@ -23,8 +23,6 @@ jobs:
                   ... on ProjectV2 {
                     fields(first: 20) {
                       nodes {
-                        id
-                        name
                         ... on ProjectV2SingleSelectField {
                           id
                           name
@@ -107,7 +105,7 @@ jobs:
             console.log(`Issue status: ${statusFieldValue}`);
 
             // Step 3: Update Start Date for "In Progress" status
-            if (statusFieldValue === 'In Progress') {
+            if (statusFieldValue === 'In progress') {
               console.log(`Updating Start Date for issue ${issueNodeId}`);
               await github.graphql(`
                 mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $value: String!) {
