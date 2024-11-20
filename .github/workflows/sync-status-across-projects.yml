@@ -43,13 +43,25 @@ jobs:
                 }
               `;
               console.log("Running GraphQL Query with orgName:", orgName, "and projectNumber:", projectNumber);
+              try {
               const { data } = await github.graphql(query, {
                 orgName: orgName,
                 projectNumber: projectNumber
               });
+
               console.log("GraphQL Response:", JSON.stringify(data, null, 2));
-              console.log("GraphQL Errors:", JSON.stringify(errors, null, 2));
-              return data;
+
+              if (!data) {
+                console.log("No data received from GitHub GraphQL API.");
+                return null;
+              } 
+
+              return data;  
+
+            } catch (error) {
+              console.error("Error executing GraphQL query:", error);
+              return null;
+            }
             };
 
             // Fetch fields for the source project

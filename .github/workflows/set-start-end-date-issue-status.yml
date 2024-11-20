@@ -1,0 +1,159 @@
+name: Set Start and End Dates Based on Status
+
+on:
+  issues:
+    types: [edited]
+
+jobs:
+  update-date-fields:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update Start and End Date Fields
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GH_TOKEN }}
+          script: |
+            const projectId = 'PVT_kwDOAFK5-84Ak8oz';
+            const issueNodeId = context.payload.issue.node_id;
+
+            // Step 1: Fetch Project Fields dynamically
+            const { data: projectData } = await github.graphql(`
+              query($projectId: ID!) {
+                node(id: $projectId) {
+                  ... on ProjectV2 {
+                    fields(first: 20) {
+                      nodes {
+                        id
+                        name
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options {
+                            id
+                            name
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `, {
+              projectId: projectId
+            });
+
+            // Extract the necessary field IDs dynamically
+            const statusField = projectData.node.fields.nodes.find(field => field.name === 'Status');
+            const startDateField = projectData.node.fields.nodes.find(field => field.name === 'Start Date');
+            const endDateField = projectData.node.fields.nodes.find(field => field.name === 'End Date');
+
+            if (!statusField || !startDateField || !endDateField) {
+              console.log('One or more required fields (Status, Start Date, End Date) not found.');
+              return;
+            }
+
+            const statusFieldId = statusField.id;
+            const startDateFieldId = startDateField.id;
+            const endDateFieldId = endDateField.id;
+
+            console.log(`Status Field ID: ${statusFieldId}`);
+            console.log(`Start Date Field ID: ${startDateFieldId}`);
+            console.log(`End Date Field ID: ${endDateFieldId}`);
+
+            // Step 2: Fetch the issue's current status from the projectV2Item
+            const { data: issueData } = await github.graphql(`
+              query($projectId: ID!, $issueId: ID!) {
+                node(id: $issueId) {
+                  ... on Issue {
+                    projectV2Items(first: 1, projectId: $projectId) {
+                      nodes {
+                        fieldValues(first: 10) {
+                          nodes {
+                            projectField {
+                              id
+                              name
+                            }
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `, {
+              projectId: projectId,
+              issueId: issueNodeId
+            });
+
+            // Check if data is returned
+            if (!issueData || !issueData.node || !issueData.node.projectV2Items.nodes[0]) {
+              console.log('No projectV2Item found for this issue.');
+              return;
+            }
+
+            const projectItem = issueData.node.projectV2Items.nodes[0];
+
+            // Find the Status field value
+            const statusFieldValue = projectItem.fieldValues.nodes.find(field => field.projectField.id === statusFieldId)?.value;
+
+            if (!statusFieldValue) {
+              console.log('Status field not found or not updated.');
+              return;
+            }
+
+            const now = new Date().toISOString();  // Current date and time in ISO format
+
+            console.log(`Issue status: ${statusFieldValue}`);
+
+            // Step 3: Update Start Date for "In Progress" status
+            if (statusFieldValue === 'In Progress') {
+              console.log(`Updating Start Date for issue ${issueNodeId}`);
+              await github.graphql(`
+                mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $value: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId,
+                    itemId: $itemId,
+                    fieldId: $fieldId,
+                    value: $value
+                  }) {
+                    projectV2Item {
+                      id
+                    }
+                  }
+                }
+              `, {
+                projectId: projectId,
+                itemId: issueNodeId,
+                fieldId: startDateFieldId,
+                value: now
+              });
+
+              console.log(`Start date set to ${now} for issue.`);
+            }
+
+            // Step 4: Update End Date for "Done" status
+            if (statusFieldValue === 'Done') {
+              console.log(`Updating End Date for issue ${issueNodeId}`);
+              await github.graphql(`
+                mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $value: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId,
+                    itemId: $itemId,
+                    fieldId: $fieldId,
+                    value: $value
+                  }) {
+                    projectV2Item {
+                      id
+                    }
+                  }
+                }
+              `, {
+                projectId: projectId,
+                itemId: issueNodeId,
+                fieldId: endDateFieldId,
+                value: now
+              });
+
+              console.log(`End date set to ${now} for issue.`);
+            }
