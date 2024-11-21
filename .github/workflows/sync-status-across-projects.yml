@@ -19,10 +19,9 @@ jobs:
             const targetProjectNumber = 1514; 
             const targetProjectId = 'PVT_kwDOAFK5-84Ar1s4'; 
 
-            console.log(`Running GraphQL Query for source project with orgName: ${orgName} and projectNumber: ${sourceProjectNumber}`);
-            try {
-              // Fetch fields for the source project directly
-              const response = await github.graphql(`
+            // Function to fetch fields for a project
+            const fetchProjectFields = async (projectNumber, orgName) => {
+              const query = `
                 query($orgName: String!, $projectNumber: Int!) {
                   organization(login: $orgName) {
                     projectV2(number: $projectNumber) {
@@ -42,125 +41,141 @@ jobs:
                     }
                   }
                 }
-              `, {
-                orgName: orgName,
-                projectNumber: sourceProjectNumber
-              });
+              `;
+              console.log("Running GraphQL Query with orgName:", orgName, "and projectNumber:", projectNumber);
+              try {
+                const response = await github.graphql(query, {
+                  orgName: orgName,
+                  projectNumber: projectNumber
+                });
 
-              console.log("GraphQL Response:", response); // Log the entire response
+                console.log("GraphQL Response:", response);
 
-              if (!response) {
-                console.log("No response received from GitHub GraphQL API.");
-                return;
+                if (!response) {
+                  console.log("No response received from GitHub GraphQL API.");
+                  return null;
+                }
+
+                return response;
+
+              } catch (error) {
+                console.error("Error executing GraphQL query:", error);
+                return null;
               }
+            };
 
-              console.log("Source Project Fields:", data);
+            // Fetch fields for the source project
+            const sourceProjectData = await fetchProjectFields(sourceProjectNumber, orgName);
+            console.log("Source Project Fields:", sourceProjectData);
 
-              // Find the 'Status' field ID from the source project
-              const statusField = data.organization.projectV2.fields.nodes.find(field => field.name === 'Status');
-              if (!statusField) {
-                console.log("No 'Status' field found in source project.");
-                return;
-              }
-              const statusFieldId = statusField.id;
+            // Fetch fields for the target project
+            const targetProjectData = await fetchProjectFields(targetProjectNumber, orgName);
+            console.log("Target Project Fields:", targetProjectData);
 
-              console.log(`Found 'Status' field ID in source project: ${statusFieldId}`);
+            // Find the 'Status' field ID from the source project
+            const statusField = sourceProjectData.organization.projectV2.fields.nodes.find(field => field.name === 'Status');
+            if (!statusField) {
+              console.log("No 'Status' field found in source project.");
+              return;
+            }
+            const statusFieldId = statusField.id;
 
-              // Fetch the current issue data (including labels, status, and state)
-              const issueNodeId = context.payload.issue.node_id;
-              const labels = context.payload.issue.labels.map(label => label.name);
-              const issueState = context.payload.issue.state;
+            console.log(`Found 'Status' field ID in source project: ${statusFieldId}`);
 
-              // Fetch the status field value for the current issue in the source project
-              const { resource } = await github.graphql(`
-                query($projectId: ID!, $issueId: ID!) {
-                  node(id: $issueId) {
-                    ... on Issue {
-                      projectV2Items(first: 10) {
-                        nodes {
-                          fieldValues(first: 10) {
-                            nodes {
-                              projectV2Field {
-                                id
-                              }
-                              value
+            // Fetch the current issue data (including labels, status, and state)
+            const issueNodeId = context.payload.issue.node_id;
+            const labels = context.payload.issue.labels.map(label => label.name);
+            const issueState = context.payload.issue.state;
+
+            // Fetch the status field value for the current issue in the source project
+            const { resource } = await github.graphql(`
+              query($projectId: ID!, $issueId: ID!) {
+                node(id: $issueId) {
+                  ... on Issue {
+                    projectV2Items(first: 10) {
+                      nodes {
+                        fieldValues(first: 10) {
+                          nodes {
+                            projectV2Field {
+                              id
                             }
+                            value
                           }
                         }
                       }
                     }
                   }
                 }
-              `, {
-                projectId: sourceProjectId,
-                issueId: issueNodeId
-              });
-
-              // Extract the current status from the source project
-              const currentStatus = resource.node.projectV2Items.nodes.find(item => item.fieldValues.nodes.some(field => field.projectV2Field.id === statusFieldId))?.fieldValues.nodes.find(field => field.projectV2Field.id === statusFieldId)?.value;
-
-              if (!currentStatus) {
-                console.log("No status field found or status has not changed.");
-                return;
               }
+            `, {
+              projectId: sourceProjectId,
+              issueId: issueNodeId
+            });
 
-              console.log(`Current status in source project: ${currentStatus}`);
+            // Extract the current status from the source project
+            const currentStatus = resource.node.projectV2Items.nodes.find(item => item.fieldValues.nodes.some(field => field.projectV2Field.id === statusFieldId))?.fieldValues.nodes.find(field => field.projectV2Field.id === statusFieldId)?.value;
 
-              // Now sync the status field in the target project
-              await github.graphql(`
-                mutation($projectId: ID!, $contentId: ID!, $status: String!, $statusFieldId: ID!) {
-                  updateProjectV2ItemFieldValue(input: {
-                    projectId: $projectId,
-                    itemId: $contentId,
-                    fieldId: $statusFieldId,
-                    value: $status
-                  }) {
-                    projectV2Item {
-                      id
-                    }
+            if (!currentStatus) {
+              console.log("No status field found or status has not changed.");
+              return;
+            }
+
+            console.log(`Current status in source project: ${currentStatus}`);
+
+            // Now sync the status field, labels, and state in the target project
+
+            // Sync Status Field
+            await github.graphql(`
+              mutation($projectId: ID!, $contentId: ID!, $status: String!, $statusFieldId: ID!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $projectId,
+                  itemId: $contentId,
+                  fieldId: $statusFieldId,
+                  value: $status
+                }) {
+                  projectV2Item {
+                    id
                   }
                 }
-              `, {
-                projectId: targetProjectId,
-                contentId: issueNodeId,
-                status: currentStatus,
-                statusFieldId: statusFieldId
-              });
+              }
+            `, {
+              projectId: targetProjectId,
+              contentId: issueNodeId,
+              status: currentStatus,
+              statusFieldId: statusFieldId
+            });
 
-              console.log(`Status synced successfully to target project for issue ID: ${issueNodeId}`);
+            console.log(`Status synced successfully to target project for issue ID: ${issueNodeId}`);
 
-              // Sync Labels
-              await github.issues.addLabels({
+            // Sync Labels
+            await github.issues.addLabels({
+              owner: orgName,
+              repo: context.payload.repository.name,
+              issue_number: context.payload.issue.number,
+              labels: labels
+            });
+
+            console.log(`Labels synced successfully to target project for issue ID: ${issueNodeId}`);
+
+            // Sync Issue State (Closed/Reopened)
+            if (issueState === 'closed') {
+              await github.issues.update({
                 owner: orgName,
                 repo: context.payload.repository.name,
                 issue_number: context.payload.issue.number,
-                labels: labels
+                state: 'closed'
               });
 
-              console.log(`Labels synced successfully to target project for issue ID: ${issueNodeId}`);
+              console.log(`Issue state updated to 'closed' for issue ID: ${issueNodeId}`);
+            } else if (issueState === 'reopened') {
+              await github.issues.update({
+                owner: orgName,
+                repo: context.payload.repository.name,
+                issue_number: context.payload.issue.number,
+                state: 'open'
+              });
 
-              // Sync Issue State (Closed/Reopened)
-              if (issueState === 'closed') {
-                await github.issues.update({
-                  owner: orgName,
-                  repo: context.payload.repository.name,
-                  issue_number: context.payload.issue.number,
-                  state: 'closed'
-                });
-
-                console.log(`Issue state updated to 'closed' for issue ID: ${issueNodeId}`);
-              } else if (issueState === 'reopened') {
-                await github.issues.update({
-                  owner: orgName,
-                  repo: context.payload.repository.name,
-                  issue_number: context.payload.issue.number,
-                  state: 'open'
-                });
-
-                console.log(`Issue state updated to 'open' for issue ID: ${issueNodeId}`);
-              }
-
-              console.log(`Issue state synced successfully to target project for issue ID: ${issueNodeId}`);
-            } catch (error) {
-              console.error("Error during GitHub GraphQL query:", error);
+              console.log(`Issue state updated to 'open' for issue ID: ${issueNodeId}`);
             }
+
+            console.log(`Issue state synced successfully to target project for issue ID: ${issueNodeId}`);
