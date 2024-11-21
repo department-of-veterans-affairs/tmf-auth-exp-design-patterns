@@ -47,7 +47,7 @@ jobs:
                 projectNumber: sourceProjectNumber
               });
 
-              console.log("GraphQL Response:", response; // Log the entire response
+              console.log("GraphQL Response:", response); // Log the entire response
 
               if (!response) {
                 console.log("No response received from GitHub GraphQL API.");
