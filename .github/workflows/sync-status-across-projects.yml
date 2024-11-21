@@ -131,9 +131,9 @@ jobs:
             const projectItems = data.node.projectItems.nodes;
 
             // Find the "Status" field and its options
-            # const statusFieldOptions = projectItems
-            # .map(item => item.project.fields.nodes.find(field => field.name === 'Status'))  // Find "Status" field in each project
-            # .find(Boolean);
+             const statusFieldOptions = projectItems
+             .map(item => item.project.fields.nodes.find(field => field.name === 'Status'))  // Find "Status" field in each project
+             .find(Boolean);
 
             if (statusFieldOptions) {
             // Find the corresponding field value for "Status"
