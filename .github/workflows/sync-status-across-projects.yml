@@ -22,7 +22,7 @@ jobs:
             console.log(`Running GraphQL Query for source project with orgName: ${orgName} and projectNumber: ${sourceProjectNumber}`);
             try {
               // Fetch fields for the source project directly
-              const { data } = await github.graphql(`
+              const response = await github.graphql(`
                 query($orgName: String!, $projectNumber: Int!) {
                   organization(login: $orgName) {
                     projectV2(number: $projectNumber) {
@@ -47,10 +47,10 @@ jobs:
                 projectNumber: sourceProjectNumber
               });
 
-              console.log("GraphQL Response:", JSON.stringify(data, null, 2)); // Log the entire response
+              console.log("GraphQL Response:", response; // Log the entire response
 
-              if (!data) {
-                console.log("No data received from GitHub GraphQL API.");
+              if (!response) {
+                console.log("No response received from GitHub GraphQL API.");
                 return;
               }
 
