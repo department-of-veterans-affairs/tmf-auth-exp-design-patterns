@@ -126,7 +126,7 @@ jobs:
                 issueId: issueNodeId
                 });
 
-            console.log("Issue data": data)
+            console.log("Issue data", data)
 
             const projectItems = data.node.projectItems.nodes;
 
