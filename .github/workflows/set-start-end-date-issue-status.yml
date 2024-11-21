@@ -13,8 +13,26 @@ jobs:
         with:
           github-token: ${{ secrets.GH_TOKEN }}
           script: |
-            const projectId = 'PVT_kwDOAFK5-84Ak8oz';
-            const issueNodeId = context.payload.issue.node_id;
+            const projectId = 'PVT_kwDOAFK5-84Ak8oz'; 
+            let issueNodeId;
+            let statusFieldId;
+            let startDateFieldId;
+            let endDateFieldId;
+
+            const issueAction = context.payload.action;
+            if (issueAction === 'edited') {
+              console.log('The issue was edited!');
+            } else {
+              console.log(`The issue was not edited. It was ${issueAction}.`);
+            }
+
+            // Check if the issue was edited (i.e., status field was changed)
+            if (context.payload.issue) {
+              issueNodeId = context.payload.issue.node_id;  // Issue update
+            } else {
+              console.log('This action was triggered without an issue.');
+              return;
+            }
 
             // Step 1: Fetch Project Fields dynamically
             const { data: projectData } = await github.graphql(`
@@ -23,7 +41,7 @@ jobs:
                   ... on ProjectV2 {
                     fields(first: 20) {
                       nodes {
-                        __typename  # to know the type of the field
+                        __typename
                         ... on ProjectV2SingleSelectField {
                           id
                           name
@@ -55,9 +73,9 @@ jobs:
               return;
             }
 
-            const statusFieldId = statusField.id;
-            const startDateFieldId = startDateField.id;
-            const endDateFieldId = endDateField.id;
+            statusFieldId = statusField.id;
+            startDateFieldId = startDateField.id;
+            endDateFieldId = endDateField.id;
 
             console.log(`Status Field ID: ${statusFieldId}`);
             console.log(`Start Date Field ID: ${startDateFieldId}`);
@@ -72,7 +90,7 @@ jobs:
                       nodes {
                         fieldValues(first: 10) {
                           nodes {
-                            projectField {
+                            projectV2Field {
                               id
                               name
                             }
@@ -118,7 +136,9 @@ jobs:
                     projectId: $projectId,
                     itemId: $itemId,
                     fieldId: $fieldId,
-                    value: $value
+                      value: { 
+                        date: $value
+                    }
                   }) {
                     projectV2Item {
                       id
@@ -144,7 +164,9 @@ jobs:
                     projectId: $projectId,
                     itemId: $itemId,
                     fieldId: $fieldId,
-                    value: $value
+                    value: { 
+                        date: $value
+                    }
                   }) {
                     projectV2Item {
                       id

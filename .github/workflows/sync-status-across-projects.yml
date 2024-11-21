@@ -1,75 +1,74 @@
-name: Sync Status Across Projects
+name: Sync Status, Labels, and State Across Projects
 
 on:
   issues:
     types: [edited, labeled, unlabeled, closed, reopened]
 
 jobs:
-  sync-status:
+  sync-status-labels-state:
     runs-on: ubuntu-latest
     steps:
-      - name: Sync Status Field
+      - name: Sync Issue Fields
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GH_TOKEN }}
           script: |
-            const orgName =  process.env.GITHUB_REPOSITORY_OWNER;
+            const orgName = process.env.GITHUB_REPOSITORY_OWNER;
             const sourceProjectNumber = 1314; 
             const sourceProjectId = 'PVT_kwDOAFK5-84Ak8oz';
             const targetProjectNumber = 1514; 
             const targetProjectId = 'PVT_kwDOAFK5-84Ar1s4'; 
 
-            // Function to fetch fields for a project
-            const fetchProjectFields = async (projectNumber, orgName) => {
-              const query = `
-                query($orgName: String!, $projectNumber: Int!) {
-                  organization(login: $orgName) {
-                    projectV2(number: $projectNumber) {
-                      id
-                      fields(first: 20) {
-                        nodes {
-                          ... on ProjectV2SingleSelectField {
+            // GraphQL query to fetch fields for a project
+            const query = `
+              query($orgName: String!, $projectNumber: Int!) {
+                organization(login: $orgName) {
+                  projectV2(number: $projectNumber) {
+                    id
+                    fields(first: 20) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options {
                             id
                             name
-                            options {
-                              id
-                              name
-                            }
                           }
                         }
                       }
                     }
                   }
                 }
-              `;
-              console.log("Running GraphQL Query with orgName:", orgName, "and projectNumber:", projectNumber);
+              }
+            `;
+
+            // Function to run the GraphQL query
+            const runQuery = async (orgName, projectNumber) => {
+              console.log(`Running GraphQL Query with orgName: ${orgName} and projectNumber: ${projectNumber}`);
               try {
-              const { data } = await github.graphql(query, {
-                orgName: orgName,
-                projectNumber: projectNumber
-              });
+                const { data } = await github.graphql(query, {
+                  orgName: orgName,
+                  projectNumber: projectNumber
+                });
+                console.log("GraphQL Response:", JSON.stringify(data, null, 2));
 
-              console.log("GraphQL Response:", JSON.stringify(data, null, 2));
-
-              if (!data) {
-                console.log("No data received from GitHub GraphQL API.");
+                if (!data) {
+                  console.log("No data received from GitHub GraphQL API.");
+                  return null;
+                }
+                return data;
+              } catch (error) {
+                console.error("Error executing GraphQL query:", error);
                 return null;
-              } 
-
-              return data;  
-
-            } catch (error) {
-              console.error("Error executing GraphQL query:", error);
-              return null;
-            }
+              }
             };
 
             // Fetch fields for the source project
-            const sourceProjectData = await fetchProjectFields(sourceProjectNumber, orgName);
+            const sourceProjectData = await runQuery(orgName, sourceProjectNumber);
             console.log("Source Project Fields:", sourceProjectData);
-            
+
             // Fetch fields for the target project
-            const targetProjectData = await fetchProjectFields(targetProjectNumber, orgName);
+            const targetProjectData = await runQuery(orgName, targetProjectNumber);
             console.log("Target Project Fields:", targetProjectData);
 
             // Find the 'Status' field ID from the source project
@@ -82,8 +81,10 @@ jobs:
 
             console.log(`Found 'Status' field ID in source project: ${statusFieldId}`);
 
-            // Fetch the current issue status from the source project
+            // Fetch the current issue data (including labels, status, and state)
             const issueNodeId = context.payload.issue.node_id;
+            const labels = context.payload.issue.labels.map(label => label.name);
+            const issueState = context.payload.issue.state;
 
             // Fetch the status field value for the current issue in the source project
             const { resource } = await github.graphql(`
@@ -120,9 +121,11 @@ jobs:
 
             console.log(`Current status in source project: ${currentStatus}`);
 
-            // Now sync the status field in the target project
+            // Now sync the status field, labels, and state in the target project
+
+            // Sync Status Field
             await github.graphql(`
-              mutation($projectId: ID!, $contentId: ID!, $status: String!) {
+              mutation($projectId: ID!, $contentId: ID!, $status: String!, $statusFieldId: ID!) {
                 updateProjectV2ItemFieldValue(input: {
                   projectId: $projectId,
                   itemId: $contentId,
@@ -137,8 +140,41 @@ jobs:
             `, {
               projectId: targetProjectId,
               contentId: issueNodeId,
-              status: currentStatus
+              status: currentStatus,
+              statusFieldId: statusFieldId
             });
 
             console.log(`Status synced successfully to target project for issue ID: ${issueNodeId}`);
 
+            // Sync Labels
+            await github.issues.addLabels({
+              owner: orgName,
+              repo: context.payload.repository.name,
+              issue_number: context.payload.issue.number,
+              labels: labels
+            });
+
+            console.log(`Labels synced successfully to target project for issue ID: ${issueNodeId}`);
+
+            // Sync Issue State (Closed/Reopened)
+            if (issueState === 'closed') {
+              await github.issues.update({
+                owner: orgName,
+                repo: context.payload.repository.name,
+                issue_number: context.payload.issue.number,
+                state: 'closed'
+              });
+
+              console.log(`Issue state updated to 'closed' for issue ID: ${issueNodeId}`);
+            } else if (issueState === 'reopened') {
+              await github.issues.update({
+                owner: orgName,
+                repo: context.payload.repository.name,
+                issue_number: context.payload.issue.number,
+                state: 'open'
+              });
+
+              console.log(`Issue state updated to 'open' for issue ID: ${issueNodeId}`);
+            }
+
+            console.log(`Issue state synced successfully to target project for issue ID: ${issueNodeId}`);
