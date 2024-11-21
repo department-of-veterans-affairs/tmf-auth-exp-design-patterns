@@ -88,39 +88,67 @@ jobs:
             const issueState = context.payload.issue.state;
 
             // Fetch the status field value for the current issue in the source project
-            const { resource } = await github.graphql(`
-              query($projectId: ID!, $issueId: ID!) {
-                node(id: $issueId) {
-                  ... on Issue {
-                    projectV2Items(first: 10) {
-                      nodes {
-                        fieldValues(first: 10) {
-                          nodes {
-                            projectV2Field {
-                              id
+                const data = await github.graphql(`
+                query($issueId: ID!) {
+                    node(id: $issueId) {
+                    ... on Issue {
+                        projectItems(first: 10) {
+                        nodes {
+                            project {
+                            id
+                            fields(first: 10) {
+                                nodes {
+                                ... on ProjectV2SingleSelectField {
+                                    id
+                                    name
+                                    options {
+                                    id
+                                    name
+                                    }
+                                }
+                                }
                             }
-                            value
-                          }
+                            }
+                            fieldValues(first: 10) {
+                            nodes {
+                                ... on ProjectV2ItemFieldSingleSelectValue {
+                                id
+                                name
+                                }
+                            }
+                            }
                         }
-                      }
+                        }
                     }
-                  }
+                    }
                 }
-              }
-            `, {
-              projectId: sourceProjectId,
-              issueId: issueNodeId
-            });
+                `, {
+                issueId: issueNodeId
+                });
 
-            // Extract the current status from the source project
-            const currentStatus = resource.node.projectV2Items.nodes.find(item => item.fieldValues.nodes.some(field => field.projectV2Field.id === statusFieldId))?.fieldValues.nodes.find(field => field.projectV2Field.id === statusFieldId)?.value;
+            console.log("Issue data": data)
 
-            if (!currentStatus) {
-              console.log("No status field found or status has not changed.");
-              return;
+            const projectItems = data.node.projectItems.nodes;
+
+            // Find the "Status" field and its options
+            const statusField = projectItems
+            .map(item => item.project.fields.nodes.find(field => field.name === 'Status'))  // Find "Status" field in each project
+            .find(Boolean);
+
+            if (statusField) {
+            // Find the corresponding field value for "Status"
+            const currentStatus = projectItems
+                .flatMap(item => item.fieldValues.nodes) 
+                .find(fieldValue => statusField.options.some(option => option.name === fieldValue.name))?.name;  // Find matching option by name
+
+            if (currentStatus) {
+                console.log(`Current status for the issue: ${currentStatus}`);
+            } else {
+                console.log("No matching status found for the issue.");
             }
-
-            console.log(`Current status in source project: ${currentStatus}`);
+            } else {
+            console.log("No 'Status' field found in the project.");
+            }
 
             // Now sync the status field, labels, and state in the target project
 
