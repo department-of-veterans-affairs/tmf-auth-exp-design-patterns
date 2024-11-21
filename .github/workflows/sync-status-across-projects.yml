@@ -131,15 +131,15 @@ jobs:
             const projectItems = data.node.projectItems.nodes;
 
             // Find the "Status" field and its options
-            const statusField = projectItems
-            .map(item => item.project.fields.nodes.find(field => field.name === 'Status'))  // Find "Status" field in each project
-            .find(Boolean);
+            # const statusFieldOptions = projectItems
+            # .map(item => item.project.fields.nodes.find(field => field.name === 'Status'))  // Find "Status" field in each project
+            # .find(Boolean);
 
-            if (statusField) {
+            if (statusFieldOptions) {
             // Find the corresponding field value for "Status"
             const currentStatus = projectItems
                 .flatMap(item => item.fieldValues.nodes) 
-                .find(fieldValue => statusField.options.some(option => option.name === fieldValue.name))?.name;  // Find matching option by name
+                .find(fieldValue => statusFieldOptions.options.some(option => option.name === fieldValue.name))?.name;  // Find matching option by name
 
             if (currentStatus) {
                 console.log(`Current status for the issue: ${currentStatus}`);
